@@ -1,0 +1,33 @@
+name: Ask Venice's models what they are
+
+on: workflow_dispatch
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Send the same prompts to each Venice model ID and the model it may really be
+        run: python3 probe.py
+        env:
+          VENICE_KEY: ${{ secrets.VENICE_KEY }}
+          OPENROUTER_KEY: ${{ secrets.OPENROUTER_KEY }}
+
+      - name: Attest the raw results
+        id: attest
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: results/*
+
+      - name: Publish the raw results and the attestation as a release
+        run: |
+          cp "${{ steps.attest.outputs.bundle-path }}" attestation.jsonl
+          gh release create "probe-${{ github.run_id }}" results/* attestation.jsonl --title "Probe $(date -u +%F)" --notes-file results/summary.md
+        env:
+          GH_TOKEN: ${{ github.token }}
